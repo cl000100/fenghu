@@ -5,7 +5,7 @@
 current_year=$(date +%Y)
 current_month=$(date +%m)
 
-# 获取当天日期
+# 获取当天日期,%y代表两位数的年份（例如，20）
 current_date=$(date +%y%m%d)
 
 # 提示用户输入内容
@@ -64,11 +64,11 @@ while true; do
         echo "$((i+1)) ${remaining_folders[$i]}"
     done
 
-    # 提示用户输入选择的文件夹序号，以逗号分隔
-    read -p "请输入选择的文件夹序号（以逗号分隔）: " choices_input
+    # 提示用户输入选择的文件夹序号，以空格分隔
+    read -p "请输入选择的文件夹序号（以空格分隔）: " choices_input
 
-    # 处理逗号分隔的多选
-    IFS=',' read -ra selected_choices <<< "$choices_input"
+    # 处理空格分隔的多选
+    IFS=' ' read -ra selected_choices <<< "$choices_input"
 
     # 用于存储用户选择的文件夹名称
     selected_folders=()
