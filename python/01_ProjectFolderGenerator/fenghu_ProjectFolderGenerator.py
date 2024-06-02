@@ -7,9 +7,6 @@ import configparser
 import platform
 from tkinter import simpledialog
 
-# 接下来的Tkinter相关导入和代码...
-
-
 # 常量定义
 DEFAULT_FOLDERS = [
     "客户资料",
@@ -34,7 +31,8 @@ DEFAULT_PROJECT_NAME = ""
 if platform.system() == "Windows":
     CURRENT_MONTH_PATH = f"\\\\fenghu\\2024\\{datetime.datetime.now().strftime('%m')}"
 else:
-    CURRENT_MONTH_PATH = f"/Users/chenglei/Desktop/2024/{datetime.datetime.now().strftime('%m')}"
+#    CURRENT_MONTH_PATH = f"/Users/chenglei/Desktop/2024/{datetime.datetime.now().strftime('%m')}"
+    CURRENT_MONTH_PATH = f"/Volumes/2024/{datetime.datetime.now().strftime('%m')}"
 
 CONFIG_DIR = os.path.join(os.path.expanduser('~'), 'fenghuini')
 CONFIG_FILE = os.path.join(CONFIG_DIR, 'folder_settings.ini')  # 将配置文件存储在用户主目录中的 fenghuini 文件夹里
@@ -353,7 +351,10 @@ def clear_all_content():
     entry_project_name.delete(0, tk.END)
     entry_custom_path.delete(0, tk.END)
     preset_name_display.delete(0, tk.END)
-
+    # 清空显示已加载的预设名称的文本框
+    preset_name_display.config(state='normal')
+    preset_name_display.delete(0, tk.END)
+    preset_name_display.config(state='readonly')
 
 
 app = tk.Tk()
@@ -361,7 +362,7 @@ app.title("风乎-文件夹创建助手V1.0")
 
 # 项目名称和路径选择部分
 frame_top = tk.Frame(app)
-frame_top.pack(fill=tk.X, padx=10, pady=10)
+frame_top.pack(fill=tk.X, padx=10, pady=5)
 
 tk.Label(frame_top, text="请输入项目名称:").grid(row=0, column=0, padx=5, pady=5)
 entry_project_name = tk.Entry(frame_top)
@@ -381,7 +382,7 @@ btn_reset_path.grid(row=1, column=3, padx=5, pady=5)
 
 # 文件夹和子文件夹选项部分
 frame_middle = tk.Frame(app)
-frame_middle.pack(fill=tk.X, padx=10, pady=10)
+frame_middle.pack(fill=tk.X, padx=10, pady=5)
 
 checkbox_vars = []
 entry_vars = []
@@ -468,6 +469,9 @@ btn_load_preset.pack(side=tk.LEFT, padx=5, pady=3)
 preset_name_display = tk.Entry(frame_load_preset, state='readonly', width=btn_reset_width)
 preset_name_display.pack(side=tk.LEFT, padx=5, pady=3)
 
+# 添加空白框架，增加底部空白
+frame_bottom_padding = tk.Frame(frame_bottom, height=20)
+frame_bottom_padding.pack(fill=tk.X)
 
 # 程序启动时设置默认路径并加载设置
 ensure_monthly_directory_exists(CURRENT_MONTH_PATH)
