@@ -25,6 +25,25 @@ DEFAULT_FOLDERS = [
     "协作",
     "归档"
 ]
+
+
+# 需要创建子文件夹的文件夹名称
+SUBFOLDER_FOLDERS = {
+    "客户资料","PR工程", "PR_out", "AE工程", "AE_out",
+    "3D工程", "3D_out"
+}
+
+# 需要选中的文件夹名称
+SELECTED_FOLDERS = {
+    "客户资料","PR工程", "PR_out", "AE工程", "AE_out",
+    "平面工程", "音乐", "音效", "协作", "归档"
+}
+
+# 初始化变量列表
+checkbox_vars = []
+entry_vars = []
+subfolder_vars = []
+entry_subfolders = []
 DEFAULT_PROJECT_NAME = ""
 
 # 检查操作系统类型并设置 CURRENT_MONTH_PATH
@@ -203,13 +222,16 @@ def reset_to_defaults():
     entry_custom_path.insert(0, CURRENT_MONTH_PATH)
     auto_open_var.set(True)
 
-    for idx, folder_name in enumerate(DEFAULT_FOLDERS, start=1):
-        checkbox_vars[idx - 1].set(folder_name not in ["png", "gif", "3D工程", "3D_out"])
-        subfolder_default = folder_name in ["客户资料", "PR工程", "PR_out", "AE工程", "AE_out", "3D工程", "3D_out"]
-        subfolder_vars[idx - 1].set(subfolder_default)
-        entry_vars[idx - 1].delete(0, tk.END)
-        entry_vars[idx - 1].insert(0, folder_name)
-        entry_subfolders[idx - 1].delete(0, tk.END)
+    for idx, folder_name in enumerate(DEFAULT_FOLDERS):
+        is_selected = folder_name in SELECTED_FOLDERS
+        checkbox_vars[idx].set(is_selected)
+
+        subfolder_default = folder_name in SUBFOLDER_FOLDERS
+        subfolder_vars[idx].set(subfolder_default)
+
+        entry_vars[idx].delete(0, tk.END)
+        entry_vars[idx].insert(0, folder_name)
+        entry_subfolders[idx].delete(0, tk.END)
 
     # 清空 preset_name_display 文本框的值
     preset_name_display.config(state='normal')
@@ -411,23 +433,28 @@ entry_vars = []
 subfolder_vars = []
 entry_subfolders = []
 
+# 创建复选框和输入框
 for idx, folder_name in enumerate(DEFAULT_FOLDERS, start=1):
-    checkbox_var = tk.BooleanVar(value=(folder_name not in ["png", "gif", "3D工程", "3D_out"]))
+    is_selected = folder_name in SELECTED_FOLDERS
+    checkbox_var = tk.BooleanVar(value=is_selected)
     checkbox_vars.append(checkbox_var)
+
     entry_var = tk.Entry(frame_middle)
     entry_var.insert(0, folder_name)
     entry_vars.append(entry_var)
-    subfolder_default = folder_name in ["客户资料", "PR工程", "PR_out", "AE工程", "AE_out", "3D工程", "3D_out"]
+
+    subfolder_default = folder_name in SUBFOLDER_FOLDERS
     subfolder_var = tk.BooleanVar(value=subfolder_default)
     subfolder_vars.append(subfolder_var)
+
     entry_subfolder = tk.Entry(frame_middle)
     entry_subfolders.append(entry_subfolder)
     
+    # 将组件添加到网格布局
     tk.Checkbutton(frame_middle, text="", variable=checkbox_var).grid(row=idx, column=0, padx=5, pady=5)
     entry_var.grid(row=idx, column=1, padx=5, pady=5)
     tk.Checkbutton(frame_middle, text="Sub-folder", variable=subfolder_var).grid(row=idx, column=2, padx=5, pady=5)
     entry_subfolder.grid(row=idx, column=3, padx=5, pady=5)
-
 
 # 操作按钮部分
 frame_bottom = tk.Frame(app)
