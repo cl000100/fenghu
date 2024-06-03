@@ -157,6 +157,17 @@ def load_settings():
             entry_vars[idx - 1].insert(0, config.get('folder_names', folder_name, fallback=folder_name))
             entry_subfolders[idx - 1].delete(0, tk.END)
             entry_subfolders[idx - 1].insert(0, config.get('subfolders_names', folder_name, fallback=''))
+
+    # 新增逻辑以读取并更新预设按钮的文本
+    for preset_key, button, default_text in [
+        ('preset_with_path.ini', btn_save_load_preset2, "保存预设2（含路径）"),
+        ('preset_without_path.ini', btn_save_load_preset1, "保存预设1（无路径）")
+    ]:
+        preset_file = os.path.join(CONFIG_DIR, preset_key)
+        if os.path.exists(preset_file):
+            config.read(preset_file)
+            preset_name = config.get('preset_name', 'name', fallback="")
+            button.config(text=f"加载{preset_name}预设" if preset_name else default_text)
 def save_settings():
     """保存当前设置到配置文件"""
     if os.path.exists(CONFIG_FILE):
@@ -256,6 +267,17 @@ def save_preset(include_path):
         return
 
     preset_file = os.path.join(CONFIG_DIR, 'preset_with_path.ini' if include_path else 'preset_without_path.ini')
+
+    config.read(preset_file)
+    
+    # 确保 'preset_name' section 存在
+    if 'preset_name' not in config:
+        config.add_section('preset_name')
+    
+    config.set('preset_name', 'name', preset_name)  # 写入预设名称到配置文件
+
+
+
     if os.path.exists(preset_file):
         config.read(preset_file)
 
