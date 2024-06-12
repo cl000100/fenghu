@@ -8,29 +8,28 @@ class DeepLTranslate:
         pass
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "text": ("STRING", {
                     "multiline": True,
                     "default": "Hello World!"
                 }),
-                "target_language": ("STRING", {
-                    "multiline": False,
-                    "default": "EN"
+                "target_language": (["EN", "ZH", "AUTO"], {
+                    "default": "AUTO"
                 }),
             },
         }
 
-    RETURN_TYPES = ("STRING",)
+    RETURN_TYPES = ("STRING", "STRING")
+    RETURN_NAMES = ("Translated Text", "Original Text")
     FUNCTION = "translate"
-
     CATEGORY = "Fenghu"
 
     def translate(self, text, target_language):
         script_dir = os.path.dirname(__file__)
-        #config_path = '/Users/chenglei/ComfyUI/custom_nodes/ComfyUI_fenghu/config.json'
-        config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+        config_path = os.path.join(script_dir, 'config.json')
+        
         # 打印路径进行调试
         print(f"Script directory: {script_dir}")
         print(f"Config path: {config_path}")
@@ -43,20 +42,52 @@ class DeepLTranslate:
         params = {
             "auth_key": auth_key,
             "text": text,
-            "target_lang": target_language
+            "target_lang": target_language if target_language != "AUTO" else ""
         }
+        
+        # # 如果目标语言是 AUTO，需要检测源语言
+        if target_language == "AUTO":
+            # 判断是否包含中文字符的函数
+            def contains_chinese(text):
+                for char in text:
+                    if '\u4e00' <= char <= '\u9fff':
+                        return True
+                return False
+
+            # 判断是否包含英文字符的函数
+            def contains_english(text):
+                for char in text:
+                    if char.isalpha():
+                        return True
+                return False
+
+            # 检测源语言
+            if contains_chinese(text):
+                source_lang = "ZH"
+            elif contains_english(text):
+                source_lang = "EN"
+            else:
+                # 如果既没有中文字符也没有英文字符，则默认为中文
+                source_lang = "ZH"
+
+            # 根据源语言决定目标语言
+            if source_lang == "ZH":
+                params["target_lang"] = "EN"
+            else:
+                params["target_lang"] = "ZH"        
+
         response = requests.post(url, data=params)
         result = response.json()
         translated_text = result["translations"][0]["text"]
-        return (translated_text,)
+        return (translated_text, text)
 
-# A dictionary that contains all nodes you want to export with their names
-# NOTE: names should be globally unique
+
+# 将节点类映射到框架中
 NODE_CLASS_MAPPINGS = {
-    "fenghu_Translate Node": DeepLTranslate
+    "DeepLTranslateNode": DeepLTranslate
 }
 
-# A dictionary that contains the friendly/humanly readable titles for the nodes
+# 提供友好名称
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "fenghu_Translate": "fenghu_Translate Node"
+    "DeepLTranslateNode": "DeepL Translate Node"
 }
