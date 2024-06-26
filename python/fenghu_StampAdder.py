@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import filedialog
 from PIL import Image, ImageTk
 import os
+import time
 
 class StampApp:
     def __init__(self, root):
@@ -88,13 +89,19 @@ class StampApp:
             self.canvas.create_image(preview_x, preview_y, anchor=tk.NW, image=self.stamp_tk, tags="stamp_preview")
             self.update_debug_info()
 
+
+
     def add_stamp_to_image(self):
         if not self.input_image_path or not self.stamp_image_path or not self.stamp_preview_position:
             self.output_label.config(text="请先选择输入图片、电子章图片，并在Canvas上选择电子章位置")
             return
 
         input_folder = os.path.dirname(self.input_image_path)
-        output_path = os.path.join(input_folder, "output_image.png")
+        input_filename = os.path.basename(self.input_image_path)
+        filename_without_ext, ext = os.path.splitext(input_filename)
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        output_filename = f"{filename_without_ext}_{timestamp}.png"
+        output_path = os.path.join(input_folder, output_filename)
 
         base_image = Image.open(self.input_image_path)
         stamp = Image.open(self.stamp_image_path)
@@ -102,25 +109,29 @@ class StampApp:
         if stamp.mode != 'RGBA':
             stamp = stamp.convert('RGBA')
 
+        # 计算缩放因子
         scale_factor = self.get_scale_factor()
 
+        # 计算电子章新的宽度和高度
         scaled_width = int(stamp.width * scale_factor)
         scaled_height = int(stamp.height * scale_factor)
 
+        # 缩放电子章图片
         scaled_stamp = stamp.resize((scaled_width, scaled_height), Image.LANCZOS)
 
+        # 计算电子章添加的位置
         base_width, base_height = base_image.size
-
         scaled_x = self.stamp_preview_position[0] / self.image_scale
         scaled_y = self.stamp_preview_position[1] / self.image_scale
-
         stamp_position = (
             round(scaled_x - scaled_width / 2),
             round(scaled_y - scaled_height / 2)
         )
 
+        # 添加电子章到输入图片
         base_image.paste(scaled_stamp, stamp_position, scaled_stamp)
 
+        # 保存图片
         base_image.save(output_path)
 
         self.output_label.config(text=f"生成的图片已保存到: {output_path}")
