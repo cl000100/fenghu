@@ -134,9 +134,12 @@ def process_pdf_with_stamp(pdf_path, stamp_path, output_dir, dpi, full_stamp_pos
             add_stamp_to_png(png_path, stamps[idx], stamped_png_path, scale_factor, position="right_third")
         stamped_png_paths.append(stamped_png_path)
 
+    # 提取原始文件名（不包含扩展名）
+    base_filename = os.path.splitext(os.path.basename(pdf_path))[0]
+
     # 将带有电子章的PNG图像合成为新的PDF文件
     timestamp = time.strftime("%Y%m%d%H%M%S")
-    output_pdf = os.path.join(output_dir, f"stamped_pdf_{timestamp}.pdf")
+    output_pdf = os.path.join(output_dir, f"{base_filename}_{timestamp}.pdf")
     png_to_pdf(stamped_png_paths, output_pdf)
 
     return output_pdf, png_width, png_height
