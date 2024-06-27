@@ -14,6 +14,9 @@ def pdf_to_png(pdf_path, output_dir, dpi):
     doc = fitz.open(pdf_path)
     images = []
 
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
     for i in range(len(doc)):
         page = doc.load_page(i)
         pix = page.get_pixmap(dpi=dpi)  # 获取指定 DPI 的Pixmap，确保高分辨率
@@ -31,7 +34,7 @@ def pdf_to_png(pdf_path, output_dir, dpi):
         img.save(png_path, "PNG", compress_level=0, quality=100)  # 设置最高质量参数
         png_paths.append(png_path)
 
-        print(f"Output PNG Dimensions: {img.width} x {img.height}")
+        print(f"Output PNG Path: {png_path} Dimensions: {img.width} x {img.height}")
 
     return png_paths, images[0].width, images[0].height
 
@@ -47,11 +50,13 @@ def split_stamp(stamp_path, num_splits):
         splits.append(split_stamp)
     
     print(f"Original Stamp Dimensions: {width} x {height}")
+    for i, split in enumerate(splits):
+        print(f"Split {i + 1} Dimensions: {split.size}")
 
     return splits
 
 # 添加电子章到PNG图像并调整大小（保持相对比例）
-def add_stamp_to_png(png_path, stamp, output_path, scale_factor, position="right_bottom", additional_stamp=None, additional_position=None):
+def add_stamp_to_png(png_path, stamp, output_path, scale_factor, position="custom", custom_position=None):
     img = Image.open(png_path)
     
     # 计算电子章的新大小
@@ -61,7 +66,10 @@ def add_stamp_to_png(png_path, stamp, output_path, scale_factor, position="right
     # 调整电子章大小
     scaled_stamp = stamp.resize((new_width, new_height), Image.LANCZOS)
     
-    if position == "right_bottom":
+    # 根据指定位置添加电子章
+    if position == "custom" and custom_position:
+        x, y = custom_position
+    elif position == "right_bottom":
         x = img.width - scaled_stamp.width
         y = img.height - scaled_stamp.height
     elif position == "right_third":
@@ -70,22 +78,10 @@ def add_stamp_to_png(png_path, stamp, output_path, scale_factor, position="right
     
     # 添加电子章到PNG图像
     img.paste(scaled_stamp, (x, y), scaled_stamp)
-
-    # 如果有额外的电子章，添加到指定位置
-    if additional_stamp and additional_position:
-        add_x, add_y = additional_position
-        add_scale_factor = img.width / 2480
-        additional_new_width = int(additional_stamp.width * add_scale_factor)
-        additional_new_height = int(additional_stamp.height * add_scale_factor)
-        additional_stamp_resized = additional_stamp.resize((additional_new_width, additional_new_height), Image.LANCZOS)
-        add_x -= additional_stamp_resized.width // 2
-        add_y -= additional_stamp_resized.height // 2
-        img.paste(additional_stamp_resized, (add_x, add_y), additional_stamp_resized)
+    print(f"Added stamp to PNG: {png_path}, position: {position}, coordinates: (x={x}, y={y})")
     
     img.save(output_path, "PNG", compress_level=0, quality=100)  # 设置最高质量参数
-    
-    print(f"Scaled Stamp Dimensions: {scaled_stamp.width} x {scaled_stamp.height}")
-    print(f"Stamp Position on PNG: (x={x}, y={y})")
+    print(f"Saved stamped PNG to: {output_path}")
 
 # 将PNG图像合成为PDF文件
 def png_to_pdf(png_paths, output_path):
@@ -99,26 +95,37 @@ def png_to_pdf(png_paths, output_path):
     doc.close()
 
 # 主程序入口
-# 更新 process_pdf_with_stamp 函数
-def process_pdf_with_stamp(pdf_path, stamp_path, output_dir, dpi, full_stamp_pages):
+# 修改process_pdf_with_stamp函数，传递正确的位置参数
+def process_pdf_with_stamp(pdf_path, stamp_path, output_dir, dpi, full_stamp_pages, seam_stamp_pages):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
     png_paths, png_width, png_height = pdf_to_png(pdf_path, output_dir, dpi)
     num_pages = len(png_paths)
-    stamps = split_stamp(stamp_path, num_pages)
     scale_factor = calculate_scale_factor(png_width)
+    stamped_png_paths = list(png_paths)  # 复制一份原始PNG路径列表，用于储存处理后的PNG路径
 
-    stamped_png_paths = []
+    # 处理全章
     for idx, png_path in enumerate(png_paths):
-        stamped_png_path = os.path.join(output_dir, f"stamped_page_{idx + 1}.png")
         if (idx + 1) in full_stamp_pages:
+            print(f"Processing full stamp for page {idx + 1}")
             full_stamp = Image.open(stamp_path)
+            stamped_png_path = os.path.join(output_dir, f"full_stamped_page_{idx + 1}.png")
             position = stamp_positions.get(idx + 1, (0, 0))  # 获取对应页码的全章位置
-            add_stamp_to_png(png_path, stamps[idx], stamped_png_path, scale_factor, position="right_third", additional_stamp=full_stamp, additional_position=position)
-        else:
-            add_stamp_to_png(png_path, stamps[idx], stamped_png_path, scale_factor, position="right_third")
-        stamped_png_paths.append(stamped_png_path)
+            add_stamp_to_png(png_path, full_stamp, stamped_png_path, scale_factor, position="custom", custom_position=position)
+            stamped_png_paths[idx] = stamped_png_path  # 更新处理后的PNG路径
+            print(f"Added full stamp to page {idx + 1}, saved to {stamped_png_path}")
+
+    # 处理骑缝章
+    seam_stamps = split_stamp(stamp_path, len(seam_stamp_pages))
+    for idx, page_num in enumerate(seam_stamp_pages):
+        if page_num <= num_pages:
+            print(f"Processing seam stamp for page {page_num}")
+            original_png_path = stamped_png_paths[page_num - 1] if stamped_png_paths[page_num - 1] != png_paths[page_num - 1] else png_paths[page_num - 1]
+            stamped_png_path = os.path.join(output_dir, f"seam_stamped_page_{page_num}.png")
+            add_stamp_to_png(original_png_path, seam_stamps[idx], stamped_png_path, scale_factor, position="right_third")
+            stamped_png_paths[page_num - 1] = stamped_png_path  # 更新处理后的PNG路径
+            print(f"Added seam stamp to page {page_num}, saved to {stamped_png_path}")
 
     base_filename = os.path.splitext(os.path.basename(pdf_path))[0]
     timestamp = time.strftime("%Y%m%d%H%M%S")
@@ -147,6 +154,7 @@ def start_processing():
     dpi = int(dpi_entry.get())
     output_dir = os.path.dirname(pdf_path)
     full_stamp_pages = list(map(int, full_stamp_page_entry.get().split(',')))
+    seam_stamp_pages = list(map(int, seam_stamp_page_entry.get().split(',')))
 
     if not os.path.isfile(pdf_path):
         messagebox.showerror("错误", "请选择有效的PDF文件")
@@ -157,7 +165,7 @@ def start_processing():
         return
 
     try:
-        output_pdf, png_width, png_height = process_pdf_with_stamp(pdf_path, stamp_path, output_dir, dpi, full_stamp_pages)
+        output_pdf, png_width, png_height = process_pdf_with_stamp(pdf_path, stamp_path, output_dir, dpi, full_stamp_pages, seam_stamp_pages)
         result_label.config(text=f"生成图片分辨率：{png_width} x {png_height}")
         messagebox.showinfo("成功", f"已生成带有电子章的PDF文件：{output_pdf}")
     except Exception as e:
@@ -169,6 +177,7 @@ def preview_resolution():
     dpi = int(dpi_entry.get())
     output_dir = os.path.dirname(pdf_path)
     full_stamp_pages = list(map(int, full_stamp_page_entry.get().split(',')))
+    seam_stamp_pages = list(map(int, seam_stamp_page_entry.get().split(',')))
 
     if not os.path.isfile(pdf_path):
         messagebox.showerror("错误", "请选择有效的PDF文件")
@@ -194,6 +203,7 @@ def preview_resolution():
 
     except Exception as e:
         messagebox.showerror("错误", f"预览过程中出现错误：{str(e)}")
+
 def preview_last_page(last_png_path):
     img = Image.open(last_png_path)
     scale_factor_canvas = 300 / img.width
@@ -203,7 +213,6 @@ def preview_last_page(last_png_path):
     canvas.image = preview_img_tk
 
 # 处理画布点击事件
-# 修改 on_canvas_click 函数
 def on_canvas_click(event):
     global png_width, png_height
     scale_factor = 300 / png_width
@@ -246,7 +255,7 @@ tk.Button(root, text="选择文件", command=select_stamp).grid(row=1, column=2,
 tk.Label(root, text="DPI:").grid(row=2, column=0, padx=10, pady=5)
 dpi_entry = tk.Entry(root, width=20)
 dpi_entry.grid(row=2, column=1, padx=10, pady=5)
-dpi_entry.insert(0, "300")
+dpi_entry.insert(0, "72")
 
 # 全章位置输入部分
 tk.Label(root, text="全章位置X:").grid(row=3, column=0, padx=10, pady=5)
@@ -265,19 +274,25 @@ full_stamp_page_entry = tk.Entry(root, width=20)
 full_stamp_page_entry.grid(row=5, column=1, padx=10, pady=5)
 full_stamp_page_entry.insert(0, "1,3")
 
+# 骑缝章页码输入部分
+tk.Label(root, text="骑缝章页码(用逗号分隔):").grid(row=6, column=0, padx=10, pady=5)
+seam_stamp_page_entry = tk.Entry(root, width=20)
+seam_stamp_page_entry.grid(row=6, column=1, padx=10, pady=5)
+seam_stamp_page_entry.insert(0, "2,4")
+
 # 开始处理按钮
-tk.Button(root, text="开始处理", command=start_processing).grid(row=6, column=1, padx=10, pady=10)
+tk.Button(root, text="开始处理", command=start_processing).grid(row=7, column=1, padx=10, pady=10)
 
 # 预览生成图片分辨率按钮
-tk.Button(root, text="预览生成图片分辨率", command=preview_resolution).grid(row=7, column=1, padx=10, pady=10)
+tk.Button(root, text="预览生成图片分辨率", command=preview_resolution).grid(row=8, column=1, padx=10, pady=10)
 
 # 结果标签
 result_label = tk.Label(root, text="")
-result_label.grid(row=8, column=0, columnspan=3, padx=10, pady=10)
+result_label.grid(row=9, column=0, columnspan=3, padx=10, pady=10)
 
 # 创建画布
 canvas = tk.Canvas(root, width=300, height=3508 * (300 / 2480), bg='white')
-canvas.grid(row=9, column=0, columnspan=3, padx=10, pady=10)
+canvas.grid(row=10, column=0, columnspan=3, padx=10, pady=10)
 canvas.bind("<Button-1>", on_canvas_click)
 
 root.mainloop()
