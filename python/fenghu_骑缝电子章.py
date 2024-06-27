@@ -4,8 +4,7 @@ import os
 import time
 import tkinter as tk
 from tkinter import filedialog, messagebox
-# 定义全局变量
-global png_width, png_height
+
 # 计算缩放因子
 def calculate_scale_factor(png_width, a4_width=2480):
     return png_width / a4_width
@@ -101,43 +100,27 @@ def png_to_pdf(png_paths, output_path):
 
 # 主程序入口
 # 更新 process_pdf_with_stamp 函数
-def process_pdf_with_stamp(pdf_path, stamp_path, output_dir, dpi, full_stamp_position):
-    # 创建临时目录存放中间PNG文件
+def process_pdf_with_stamp(pdf_path, stamp_path, output_dir, dpi, full_stamp_pages):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    # 将PDF转换为单页PNG图像
     png_paths, png_width, png_height = pdf_to_png(pdf_path, output_dir, dpi)
-
-    # 获取PDF页数
     num_pages = len(png_paths)
-    
-    # 加载并切分电子章
     stamps = split_stamp(stamp_path, num_pages)
-
-    # 获取PNG图像宽度，并计算缩放因子
     scale_factor = calculate_scale_factor(png_width)
 
-    print(f"Output PNG Width: {png_width}")
-    print(f"Scale Factor: {scale_factor}")
-
-    # 为每个PNG图像添加电子章并保存
     stamped_png_paths = []
     for idx, png_path in enumerate(png_paths):
         stamped_png_path = os.path.join(output_dir, f"stamped_page_{idx + 1}.png")
-        if idx == num_pages - 1:
-            # 最后一页添加骑缝章和完整电子章
+        if (idx + 1) in full_stamp_pages:
             full_stamp = Image.open(stamp_path)
-            add_stamp_to_png(png_path, stamps[idx], stamped_png_path, scale_factor, position="right_third", additional_stamp=full_stamp, additional_position=full_stamp_position)
+            position = stamp_positions.get(idx + 1, (0, 0))  # 获取对应页码的全章位置
+            add_stamp_to_png(png_path, stamps[idx], stamped_png_path, scale_factor, position="right_third", additional_stamp=full_stamp, additional_position=position)
         else:
-            # 其他页添加分割电子章
             add_stamp_to_png(png_path, stamps[idx], stamped_png_path, scale_factor, position="right_third")
         stamped_png_paths.append(stamped_png_path)
 
-    # 提取原始文件名（不包含扩展名）
     base_filename = os.path.splitext(os.path.basename(pdf_path))[0]
-
-    # 将带有电子章的PNG图像合成为新的PDF文件
     timestamp = time.strftime("%Y%m%d%H%M%S")
     output_pdf = os.path.join(output_dir, f"{base_filename}_{timestamp}.pdf")
     png_to_pdf(stamped_png_paths, output_pdf)
@@ -163,9 +146,7 @@ def start_processing():
     stamp_path = stamp_path_entry.get()
     dpi = int(dpi_entry.get())
     output_dir = os.path.dirname(pdf_path)
-    full_stamp_x = int(full_stamp_x_entry.get())
-    full_stamp_y = int(full_stamp_y_entry.get())
-    full_stamp_position = (full_stamp_x, full_stamp_y)
+    full_stamp_pages = list(map(int, full_stamp_page_entry.get().split(',')))
 
     if not os.path.isfile(pdf_path):
         messagebox.showerror("错误", "请选择有效的PDF文件")
@@ -176,7 +157,7 @@ def start_processing():
         return
 
     try:
-        output_pdf, png_width, png_height = process_pdf_with_stamp(pdf_path, stamp_path, output_dir, dpi, full_stamp_position)
+        output_pdf, png_width, png_height = process_pdf_with_stamp(pdf_path, stamp_path, output_dir, dpi, full_stamp_pages)
         result_label.config(text=f"生成图片分辨率：{png_width} x {png_height}")
         messagebox.showinfo("成功", f"已生成带有电子章的PDF文件：{output_pdf}")
     except Exception as e:
@@ -187,40 +168,32 @@ def preview_resolution():
     pdf_path = pdf_path_entry.get()
     dpi = int(dpi_entry.get())
     output_dir = os.path.dirname(pdf_path)
+    full_stamp_pages = list(map(int, full_stamp_page_entry.get().split(',')))
 
     if not os.path.isfile(pdf_path):
         messagebox.showerror("错误", "请选择有效的PDF文件")
         return
 
     try:
-        global png_width, png_height  # 声明全局变量
+        global png_width, png_height, stamp_positions
         png_paths, png_width, png_height = pdf_to_png(pdf_path, output_dir, dpi)
         result_label.config(text=f"生成图片分辨率：{png_width} x {png_height}")
+
+        valid_pages = [p for p in full_stamp_pages if 1 <= p <= len(png_paths)]
+        if not valid_pages:
+            messagebox.showerror("错误", "请输入有效的页码")
+            return
         
-        # 预览最后一页
-        last_png_path = png_paths[-1]
-        last_img = Image.open(last_png_path)
-        
-        # 缩放因子
-        canvas_width = 300
-        k_scale2 = canvas_width / png_width
-        canvas_height = int(png_height * k_scale2)
-        
-        # 调整画布尺寸
-        canvas.config(width=canvas_width, height=canvas_height)
-        
-        # 缩放并显示图像
-        scaled_img = last_img.resize((canvas_width, canvas_height), Image.LANCZOS)
-        canvas_img = ImageTk.PhotoImage(scaled_img)
-        canvas.create_image(0, 0, anchor='nw', image=canvas_img)
-        canvas.image = canvas_img
-        
-        # 将 on_canvas_click 函数绑定到画布点击事件中
-        canvas.bind("<Button-1>", on_canvas_click)
-        
+        for page in valid_pages:
+            preview_png_path = png_paths[page - 1]
+            preview_last_page(preview_png_path)
+            messagebox.showinfo("提示", f"请点击画布选择第 {page} 页的全章位置")
+            canvas_clicked.set(False)  # 重置为False，等待用户点击
+            root.wait_variable(canvas_clicked)  # 等待用户选择位置
+            stamp_positions[page] = (int(full_stamp_x_entry.get()), int(full_stamp_y_entry.get()))
+
     except Exception as e:
         messagebox.showerror("错误", f"预览过程中出现错误：{str(e)}")
-
 def preview_last_page(last_png_path):
     img = Image.open(last_png_path)
     scale_factor_canvas = 300 / img.width
@@ -233,7 +206,6 @@ def preview_last_page(last_png_path):
 # 修改 on_canvas_click 函数
 def on_canvas_click(event):
     global png_width, png_height
-    # 更新电子章位置
     scale_factor = 300 / png_width
     original_x = int(event.x / scale_factor)
     original_y = int(event.y / scale_factor)
@@ -242,11 +214,19 @@ def on_canvas_click(event):
     full_stamp_y_entry.delete(0, tk.END)
     full_stamp_x_entry.insert(0, original_x)
     full_stamp_y_entry.insert(0, original_y)
+    
+    canvas_clicked.set(True)  # 设置变量值为True以继续执行
 
-
+    
 # 创建GUI
 root = tk.Tk()
 root.title("PDF电子章工具")
+
+# 定义全局变量
+global png_width, png_height, stamp_positions, canvas_clicked
+stamp_positions = {}
+canvas_clicked = tk.BooleanVar()  # 用于等待用户点击画布
+canvas_clicked.set(False)  # 初始化为False
 
 # 输入文件路径部分
 tk.Label(root, text="PDF文件路径:").grid(row=0, column=0, padx=10, pady=5)
@@ -279,19 +259,25 @@ full_stamp_y_entry = tk.Entry(root, width=20)
 full_stamp_y_entry.grid(row=4, column=1, padx=10, pady=5)
 full_stamp_y_entry.insert(0, "0")
 
+# 全章页码输入部分
+tk.Label(root, text="全章页码(用逗号分隔):").grid(row=5, column=0, padx=10, pady=5)
+full_stamp_page_entry = tk.Entry(root, width=20)
+full_stamp_page_entry.grid(row=5, column=1, padx=10, pady=5)
+full_stamp_page_entry.insert(0, "1,3")
+
 # 开始处理按钮
-tk.Button(root, text="开始处理", command=start_processing).grid(row=5, column=1, padx=10, pady=10)
+tk.Button(root, text="开始处理", command=start_processing).grid(row=6, column=1, padx=10, pady=10)
 
 # 预览生成图片分辨率按钮
-tk.Button(root, text="预览生成图片分辨率", command=preview_resolution).grid(row=6, column=1, padx=10, pady=10)
+tk.Button(root, text="预览生成图片分辨率", command=preview_resolution).grid(row=7, column=1, padx=10, pady=10)
 
 # 结果标签
 result_label = tk.Label(root, text="")
-result_label.grid(row=7, column=0, columnspan=3, padx=10, pady=10)
+result_label.grid(row=8, column=0, columnspan=3, padx=10, pady=10)
 
 # 创建画布
 canvas = tk.Canvas(root, width=300, height=3508 * (300 / 2480), bg='white')
-canvas.grid(row=8, column=0, columnspan=3, padx=10, pady=10)
+canvas.grid(row=9, column=0, columnspan=3, padx=10, pady=10)
 canvas.bind("<Button-1>", on_canvas_click)
 
 root.mainloop()
