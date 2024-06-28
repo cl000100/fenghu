@@ -6,7 +6,22 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 import fitz  # 确保导入fitz模块
 from tkinter import simpledialog  # 确保导入 simpledialog 模块
+import subprocess
+import shutil  # 确保导入shutil模块
 
+def compress_pdf(input_pdf_path, output_pdf_path):
+    gs_command = [
+        "gs",
+        "-sDEVICE=pdfwrite",
+        "-dCompatibilityLevel=1.4",
+        "-dPDFSETTINGS=/ebook",  # 压缩选项，可选/screen, /ebook, /printer, /prepress
+        "-dNOPAUSE",
+        "-dQUIET",
+        "-dBATCH",
+        f"-sOutputFile={output_pdf_path}",
+        input_pdf_path
+    ]
+    subprocess.run(gs_command, check=True)
 # 添加新功能的函数，用于提取指定页码的页面并另存为新的PDF文件
 def extract_pages():
     pdf_path = pdf_path_entry.get()
@@ -69,16 +84,17 @@ def calculate_scale_factor(png_width, a4_width=2480):
     return png_width / a4_width
 
 # 将PDF文件拆分为单页PNG图像（保持原始分辨率）
-def pdf_to_png(pdf_path, output_dir, dpi):
+def pdf_to_png(pdf_path, output_dir, dpi=300):
+    temp_dir = os.path.join(output_dir, 'temp')
     doc = fitz.open(pdf_path)
     images = []
 
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir)
 
     for i in range(len(doc)):
         page = doc.load_page(i)
-        pix = page.get_pixmap(dpi=dpi)  # 获取指定 DPI 的Pixmap，确保高分辨率
+        pix = page.get_pixmap(dpi=dpi)  # 确保高分辨率
         img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
         images.append(img)
 
@@ -89,7 +105,7 @@ def pdf_to_png(pdf_path, output_dir, dpi):
     # 保存每一页为单独的PNG文件
     png_paths = []
     for idx, img in enumerate(images):
-        png_path = os.path.join(output_dir, f"page_{idx + 1}.png")
+        png_path = os.path.join(temp_dir, f"page_{idx + 1}.png")
         img.save(png_path, "PNG", compress_level=0, quality=100)  # 设置最高质量参数
         png_paths.append(png_path)
 
@@ -154,12 +170,13 @@ def png_to_pdf(png_paths, output_path):
     doc.close()
 
 # 主程序入口
-# 修改process_pdf_with_stamp函数，传递正确的位置参数
-def process_pdf_with_stamp(pdf_path, stamp_path, output_dir, dpi, full_stamp_pages, seam_stamp_pages):
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+# 处理PDF并添加电子章
+def process_pdf_with_stamp(pdf_path, stamp_path, output_dir, dpi=300, full_stamp_pages=[], seam_stamp_pages=[]):
+    temp_dir = os.path.join(output_dir, 'temp')
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir)
 
-    png_paths, png_width, png_height = pdf_to_png(pdf_path, output_dir, dpi)
+    png_paths, png_width, png_height = pdf_to_png(pdf_path, temp_dir, dpi)
     num_pages = len(png_paths)
     scale_factor = calculate_scale_factor(png_width)
     stamped_png_paths = list(png_paths)  # 复制一份原始PNG路径列表，用于储存处理后的PNG路径
@@ -169,7 +186,7 @@ def process_pdf_with_stamp(pdf_path, stamp_path, output_dir, dpi, full_stamp_pag
         if (idx + 1) in full_stamp_pages:
             print(f"Processing full stamp for page {idx + 1}")
             full_stamp = Image.open(stamp_path)
-            stamped_png_path = os.path.join(output_dir, f"full_stamped_page_{idx + 1}.png")
+            stamped_png_path = os.path.join(temp_dir, f"full_stamped_page_{idx + 1}.png")
             position = stamp_positions.get(idx + 1, (0, 0))  # 获取对应页码的全章位置
             add_stamp_to_png(png_path, full_stamp, stamped_png_path, scale_factor, position="custom", custom_position=position)
             stamped_png_paths[idx] = stamped_png_path  # 更新处理后的PNG路径
@@ -187,19 +204,28 @@ def process_pdf_with_stamp(pdf_path, stamp_path, output_dir, dpi, full_stamp_pag
             if page_num <= num_pages:
                 print(f"Processing seam stamp for page {page_num}")
                 original_png_path = stamped_png_paths[page_num - 1] if stamped_png_paths[page_num - 1] != png_paths[page_num - 1] else png_paths[page_num - 1]
-                stamped_png_path = os.path.join(output_dir, f"seam_stamped_page_{page_num}.png")
+                stamped_png_path = os.path.join(temp_dir, f"seam_stamped_page_{page_num}.png")
                 add_stamp_to_png(original_png_path, seam_stamps[idx], stamped_png_path, scale_factor, position="right_third")
                 stamped_png_paths[page_num - 1] = stamped_png_path  # 更新处理后的PNG路径
                 print(f"Added seam stamp to page {page_num}, saved to {stamped_png_path}")
 
     base_filename = os.path.splitext(os.path.basename(pdf_path))[0]
-    timestamp = time.strftime("%Y%m%d%H%M%S")
+    timestamp = time.strftime("%Y%m%d%H%M")
     output_pdf = os.path.join(output_dir, f"{base_filename}_{timestamp}.pdf")
     png_to_pdf(stamped_png_paths, output_pdf)
 
-    return output_pdf, png_width, png_height
+    # return output_pdf, png_width, png_height
+    # 压缩PDF文件
+    compressed_output_pdf = os.path.join(output_dir, f"{base_filename}_{timestamp}_ys.pdf")
+    compress_pdf(output_pdf, compressed_output_pdf)
 
+    # 删除未压缩的PDF文件
+    os.remove(output_pdf)
 
+    # 删除中间产生的temp文件夹及其内容
+    shutil.rmtree(temp_dir)
+
+    return compressed_output_pdf, png_width, png_height
 
 # 选择PDF文件路径
 def select_pdf():
@@ -238,7 +264,7 @@ def start_processing():
     except Exception as e:
         messagebox.showerror("错误", f"处理过程中出现错误：{str(e)}", parent=root)
 
-# 预览生成图片分辨率# 预览生成图片分辨率
+# 预览生成图片分辨率
 # 修改preview_resolution函数，确保全章中心与点击位置对齐
 def preview_resolution():
     pdf_path = pdf_path_entry.get()
@@ -297,7 +323,7 @@ def on_canvas_click(event):
     
 # 创建GUI
 root = tk.Tk()
-root.title("PDF电子章工具")
+root.title("fenghu_PDF电子骑缝章工具")
 
 # 定义全局变量
 global png_width, png_height, stamp_positions, canvas_clicked
@@ -309,7 +335,7 @@ canvas_clicked.set(False)  # 初始化为False
 tk.Label(root, text="PDF文件路径:").grid(row=0, column=0, padx=10, pady=5)
 pdf_path_entry = tk.Entry(root, width=50)
 pdf_path_entry.grid(row=0, column=1, padx=10, pady=5)
-pdf_path_entry.insert(0, "/Users/chenglei/Desktop/test.pdf")
+pdf_path_entry.insert(0, "/Users/chenglei/Desktop/临时处理/test.pdf")
 tk.Button(root, text="选择文件", command=select_pdf).grid(row=0, column=2, padx=10, pady=5)
 
 # 电子章路径部分
@@ -323,15 +349,15 @@ tk.Button(root, text="选择文件", command=select_stamp).grid(row=1, column=2,
 tk.Label(root, text="DPI:").grid(row=2, column=0, padx=10, pady=5)
 dpi_entry = tk.Entry(root, width=20)
 dpi_entry.grid(row=2, column=1, padx=10, pady=5)
-dpi_entry.insert(0, "72")
+dpi_entry.insert(0, "150")
 
 # 全章位置输入部分
-tk.Label(root, text="全章位置X:").grid(row=3, column=0, padx=10, pady=5)
+tk.Label(root, text="全章位置X(Auto):").grid(row=3, column=0, padx=10, pady=5)
 full_stamp_x_entry = tk.Entry(root, width=20)
 full_stamp_x_entry.grid(row=3, column=1, padx=10, pady=5)
 full_stamp_x_entry.insert(0, "0")
 
-tk.Label(root, text="全章位置Y:").grid(row=4, column=0, padx=10, pady=5)
+tk.Label(root, text="全章位置Y(Auto):").grid(row=4, column=0, padx=10, pady=5)
 full_stamp_y_entry = tk.Entry(root, width=20)
 full_stamp_y_entry.grid(row=4, column=1, padx=10, pady=5)
 full_stamp_y_entry.insert(0, "0")
@@ -340,20 +366,20 @@ full_stamp_y_entry.insert(0, "0")
 tk.Label(root, text="全章页码(用逗号分隔):").grid(row=5, column=0, padx=10, pady=5)
 full_stamp_page_entry = tk.Entry(root, width=20)
 full_stamp_page_entry.grid(row=5, column=1, padx=10, pady=5)
-full_stamp_page_entry.insert(0, "1,3")
+full_stamp_page_entry.insert(0, "4")
 
 # 骑缝章页码输入部分
 tk.Label(root, text="骑缝章页码(用逗号分隔):").grid(row=6, column=0, padx=10, pady=5)
 seam_stamp_page_entry = tk.Entry(root, width=20)
 seam_stamp_page_entry.grid(row=6, column=1, padx=10, pady=5)
-seam_stamp_page_entry.insert(0, "2,4")
+seam_stamp_page_entry.insert(0, "99")
 
 # 按钮行布局
 button_frame = tk.Frame(root)
 button_frame.grid(row=7, column=0, columnspan=3, padx=10, pady=10)
 
 tk.Button(button_frame, text="提取页码", command=extract_pages).grid(row=0, column=0, padx=10, pady=10)
-tk.Button(button_frame, text="预览生成图片分辨率", command=preview_resolution).grid(row=0, column=1, padx=10, pady=10)
+tk.Button(button_frame, text="选择全章位置", command=preview_resolution).grid(row=0, column=1, padx=10, pady=10)
 tk.Button(button_frame, text="开始处理", command=start_processing).grid(row=0, column=2, padx=10, pady=10)
 
 
