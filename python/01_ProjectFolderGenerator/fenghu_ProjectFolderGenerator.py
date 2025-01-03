@@ -46,12 +46,20 @@ subfolder_vars = []
 entry_subfolders = []
 DEFAULT_PROJECT_NAME = ""
 
+# # 检查操作系统类型并设置 CURRENT_MONTH_PATH
+# if platform.system() == "Windows":
+#     CURRENT_MONTH_PATH = f"\\\\fenghu\\2025\\{datetime.datetime.now().strftime('%m')}"
+# else:
+# #    CURRENT_MONTH_PATH = f"/Users/chenglei/Desktop/2025/{datetime.datetime.now().strftime('%m')}"
+#     CURRENT_MONTH_PATH = f"/Volumes/2025/{datetime.datetime.now().strftime('%m')}"
+
 # 检查操作系统类型并设置 CURRENT_MONTH_PATH
+current_year = datetime.datetime.now().year
 if platform.system() == "Windows":
-    CURRENT_MONTH_PATH = f"\\\\fenghu\\2024\\{datetime.datetime.now().strftime('%m')}"
+    CURRENT_MONTH_PATH = f"\\\\fenghu\\{current_year}\\{datetime.datetime.now().strftime('%m')}"
 else:
-#    CURRENT_MONTH_PATH = f"/Users/chenglei/Desktop/2024/{datetime.datetime.now().strftime('%m')}"
-    CURRENT_MONTH_PATH = f"/Volumes/2024/{datetime.datetime.now().strftime('%m')}"
+#    CURRENT_MONTH_PATH = f"/Users/chenglei/Desktop/{current_year}/{datetime.datetime.now().strftime('%m')}"
+    CURRENT_MONTH_PATH = f"/Volumes/{current_year}/{datetime.datetime.now().strftime('%m')}"
 
 CONFIG_DIR = os.path.join(os.path.expanduser('~'), 'fenghuini')
 CONFIG_FILE = os.path.join(CONFIG_DIR, 'folder_settings.ini')  # 将配置文件存储在用户主目录中的 fenghuini 文件夹里

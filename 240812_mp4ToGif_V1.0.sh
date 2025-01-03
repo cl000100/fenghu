@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 
 # 参数设置
-INPUT_DIR="/Users/chenglei/Desktop/input"
-OUTPUT_DIR="/Users/chenglei/Desktop/output"
+INPUT_DIR="/Users/chenglei/Desktop/临时处理/input"
+OUTPUT_DIR="/Users/chenglei/Desktop/临时处理/output"
 FPS=8               # 帧速率
 SCALE_WIDTH=750      # GIF 宽度（高度会根据视频的宽高比自动调整）
 SETPTS="1*PTS"     # 视频加速因子
